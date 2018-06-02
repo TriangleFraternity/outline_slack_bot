@@ -3,12 +3,11 @@ import os
 import time
 
 from slackclient import SlackClient
-from urlextract import URLExtract
+
+from lib.urlmarker import find_urls
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-extractor = URLExtract()
 
 sc = SlackClient(os.environ["BOT_TOKEN"])
 
@@ -86,8 +85,7 @@ def handle_event(e):
 
   if channel_map[channel_id]['name'] not in ['politics', 'test_x']:
     return
-  urls = extractor.find_urls(e[FIELD_TEXT])
-  logger.debug("event: {}".format(events))
+  urls = find_urls(e[FIELD_TEXT])
   logger.info("urls: {}".format(urls))
   outline_urls = ['https://outline.com/' + u for u in urls]
   sc.api_call(
