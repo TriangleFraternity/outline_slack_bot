@@ -1,17 +1,16 @@
+import logging
+import os
 import time
 
 from slackclient import SlackClient
 from urlextract import URLExtract
-
-from secrets import slack_api_token
-import logging
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 extractor = URLExtract()
 
-sc = SlackClient(slack_api_token)
+sc = SlackClient(os.environ["BOT_TOKEN"])
 
 FIELD_TEXT = 'text'
 FIELD_CHANNEL = 'channel'
@@ -53,39 +52,59 @@ def get_channels(client):
     logger.error("no channel found.")
   return _channel_map
 
+
 channel_map = get_channels(sc)
 
-if sc.rtm_connect():
-  while sc.server.connected is True:
-    events = sc.rtm_read()
-    if events:
-      for e in events:
-        if 'subtype' in e and e['subtype'] == VALUE_TYPE_BOT_MESSAGE:
-          continue
 
-        if e['type'] != VALUE_TYPE_MESSAGE:
-          continue
+def lambda_handler(data, context):
+  """Handle an incoming HTTP request from a Slack chat-bot.
+  """
 
-        if FIELD_TEXT not in e:
-          continue
+  print(data)
+  if "challenge" in data:
+    return data["challenge"]
 
-        channel_id = e[FIELD_CHANNEL]
-        if channel_id not in channel_map:
-          continue
+  # Grab the Slack event data.
+  slack_event = data['event']
 
-        if channel_map[channel_id]['name'] not in ['politics', 'test_x']:
-          continue
-        urls = extractor.find_urls(e[FIELD_TEXT])
-        logger.debug("event: {}".format(events))
-        logger.info("urls: {}".format(urls))
-        outline_urls = ['https://outline.com/' + u for u in urls]
-        sc.api_call(
-          "chat.postMessage",
-          # TODO: param this.
-          channel=channel_id,
-          text=' '.join(outline_urls)
-        )
+  handle_event(slack_event)
 
-    time.sleep(1)
-else:
-  logger.error("Connection Failed")
+
+def handle_event(e):
+  if 'subtype' in e and e['subtype'] == VALUE_TYPE_BOT_MESSAGE:
+    return
+
+  if e['type'] != VALUE_TYPE_MESSAGE:
+    return
+
+  if FIELD_TEXT not in e:
+    return
+
+  channel_id = e[FIELD_CHANNEL]
+  if channel_id not in channel_map:
+    return
+
+  if channel_map[channel_id]['name'] not in ['politics', 'test_x']:
+    return
+  urls = extractor.find_urls(e[FIELD_TEXT])
+  logger.debug("event: {}".format(events))
+  logger.info("urls: {}".format(urls))
+  outline_urls = ['https://outline.com/' + u for u in urls]
+  sc.api_call(
+    "chat.postMessage",
+    # TODO: param this.
+    channel=channel_id,
+    text=' '.join(outline_urls)
+  )
+
+
+if __name__ == "__main__":
+  if sc.rtm_connect():
+    while sc.server.connected is True:
+      events = sc.rtm_read()
+      for evt in events:
+        handle_event(evt)
+
+      time.sleep(1)
+  else:
+    logger.error("Connection Failed")
