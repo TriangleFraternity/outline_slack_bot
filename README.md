@@ -15,3 +15,5 @@ pip install slackclient
 ```
 BOT_TOKEN=... PYTHONPATH=$(pwd):$PYTHONPATH python bot/outline_bot.py
 ```
+
+`BOT_TOKEN` is `OAuth Access Token` on https://api.slack.com/apps/AB1GJ5QLX/install-on-team?
