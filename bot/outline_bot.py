@@ -54,7 +54,7 @@ def get_channels(client):
 
 channel_map = get_channels(sc)
 
-
+# This is the entry point for aws lambda execution.
 def lambda_handler(data, context):
   """Handle an incoming HTTP request from a Slack chat-bot.
   """
@@ -96,6 +96,7 @@ def handle_event(e):
   )
 
 
+# This is the entry point for testing from command line
 if __name__ == "__main__":
   if sc.rtm_connect():
     while sc.server.connected is True:
