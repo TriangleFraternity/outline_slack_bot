@@ -31,9 +31,6 @@ git checkout -b <branch_name>
 2. Make the changes you want
 
 3. Commit your changes
-```
-git commit -a -m "message"
-```
 
 4. Push your branch to github
 ```
