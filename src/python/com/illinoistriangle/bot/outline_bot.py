@@ -11,7 +11,7 @@ logger.setLevel(logging.INFO)
 
 # sc = SlackClient(os.environ["BOT_TOKEN"])
 
-# OAuth Access Token from https://api.slack.com/apps/AB1GJ5QLX/oauth?
+# Bot User OAuth Access Tokenfrom https://api.slack.com/apps/AB1GJ5QLX/oauth?
 sc = SlackClient(os.environ["OAUTH_TOKEN"])
 
 FIELD_TEXT = 'text'
@@ -86,7 +86,7 @@ def handle_event(e):
   if channel_id not in channel_map:
     return
 
-  if channel_map[channel_id]['name'] not in ['politics', 'test_x']:
+  if channel_map[channel_id]['name'] not in ['test_x']:
     return
   urls = find_urls(e[FIELD_TEXT])
   logger.info("urls: {}".format(urls))
