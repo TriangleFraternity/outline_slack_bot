@@ -4,12 +4,15 @@ import time
 
 from slackclient import SlackClient
 
-from lib.urlmarker import find_urls
+from com.illinoistriangle.lib.urlmarker import find_urls
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-sc = SlackClient(os.environ["BOT_TOKEN"])
+# sc = SlackClient(os.environ["BOT_TOKEN"])
+
+# OAuth Access Token from https://api.slack.com/apps/AB1GJ5QLX/oauth?
+sc = SlackClient(os.environ["OAUTH_TOKEN"])
 
 FIELD_TEXT = 'text'
 FIELD_CHANNEL = 'channel'
@@ -42,7 +45,7 @@ def get_channels(client):
 
   data = client.api_call("channels.list")
   _channel_map = {}
-  if 'ok' in data:
+  if data['ok']:
     for item in data['channels']:
       if item['is_archived']:
         continue
