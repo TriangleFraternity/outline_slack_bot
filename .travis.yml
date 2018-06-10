@@ -1,8 +1,8 @@
-language: python
-python:
-  - "2.7"
-  - "3.6"
+os: linux
+dist: trusty
 
-# command to run tests
+language: python
+python: python: "2.7.15"
+
 script:
   - ./pants test tests::
