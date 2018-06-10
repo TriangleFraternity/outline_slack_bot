@@ -1,24 +1,24 @@
 import logging
 import os
 import time
+import json
 
 from slackclient import SlackClient
-
 from com.illinoistriangle.lib.urlmarker import find_urls
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# sc = SlackClient(os.environ["BOT_TOKEN"])
-
 # Bot User OAuth Access Tokenfrom https://api.slack.com/apps/AB1GJ5QLX/oauth?
 sc = SlackClient(os.environ["OAUTH_TOKEN"])
 
-FIELD_TEXT = 'text'
-FIELD_CHANNEL = 'channel'
-VALUE_TYPE_BOT_MESSAGE = 'bot_message'
-VALUE_TYPE_MESSAGE = 'message'
-APP_NAME = ''
+#TODO get id from bot name
+BOT_CALLOUT = '<@UAZUM5K33>'
+
+
+def print_json(json_msg):
+  """pretty pretty json"""
+  print(json.dumps(json_msg, indent=4))
 
 
 def get_channels(client):
@@ -55,8 +55,6 @@ def get_channels(client):
   return _channel_map
 
 
-channel_map = get_channels(sc)
-
 # This is the entry point for aws lambda execution.
 def lambda_handler(data, context):
   """Handle an incoming HTTP request from a Slack chat-bot.
@@ -72,39 +70,81 @@ def lambda_handler(data, context):
   handle_event(slack_event)
 
 
-def handle_event(e):
-  if 'subtype' in e and e['subtype'] == VALUE_TYPE_BOT_MESSAGE:
-    return
+def search_thread_parent_for_urls(channel, thread_ts):
+  """return list of urls from thread's parent post"""
+  #TODO enable scope channels:history
+  response = sc.api_call(
+              'channels.replies',
+              channel=channel,
+              thread_ts=thread_ts,
+              )
 
-  if e['type'] != VALUE_TYPE_MESSAGE:
-    return
+  urls = []
+  if response['ok'] == 'true' and 'messages' in response:
+    # from all thread messages, find earliest ts and return the text of that post
+    parent_thread_text = sorted([x['text'] for x in response['messages']], key=lambda x: x['ts'])[0]
 
-  if FIELD_TEXT not in e:
-    return
+    urls = find_urls(parent_thread_text)
 
-  channel_id = e[FIELD_CHANNEL]
-  if channel_id not in channel_map:
-    return
+  return urls
 
-  if channel_map[channel_id]['name'] not in ['test_x']:
-    return
-  urls = find_urls(e[FIELD_TEXT])
-  logger.info("urls: {}".format(urls))
-  outline_urls = ['https://outline.com/' + u for u in urls]
-  sc.api_call(
-    "chat.postMessage",
-    # TODO: param this.
-    channel=channel_id,
-    text=' '.join(outline_urls)
-  )
 
+def event_is_human_thread_reply(event):
+  """return True if the event warrants the bot's response"""
+
+  # if a message was posted...
+  if 'type' in event and event['type'] == 'message':
+    # ... by someone other than a bot...
+    if 'subtype' not in event or event['subtype'] != 'bot_message':
+      # ... in a thread...
+      if 'thread_ts' in event:
+        # TODO add channel whitelist
+        # ... in an appropriate channel...
+        if 'channel' in event and event['channel'] in ['C7RLA5HAA', ]:
+          # ... and the bot was called...
+          if 'text' in event and BOT_CALLOUT in event['text']:
+            return True
+
+  return False
+
+
+def handle_event(event):
+  # only reply to thread messages, made by humans, that call out the bot
+  if event_is_human_thread_reply(event):
+
+    # get list of urls from thread parent post
+    urls = search_thread_parent_for_urls(event['thread_ts'], event['thread_ts'])
+
+    #TODO put url whitelist/blacklist test here.  urls should be filtered at this exact point.
+    # if urls parsed successfully, post link
+    if len(urls) > 0:
+      logger.info("urls: {}".format(urls))
+      outline_urls = ['https://outline.com/' + u for u in urls]
+      bot_text = ' '.join(outline_urls)
+
+    # if failure, apologize
+    else:
+      bot_text = "Sorry, but I couldn't find any urls to post.   :feelsbadman:"
+
+    # always reply if event_is_human_thread_reply(event) = True
+    sc.api_call(
+      'chat.postMessage',
+      channel=event['channel'],
+      thread_ts=event['thread_ts'],
+      unfurl_links='true',
+      text=bot_text
+      )
 
 # This is the entry point for testing from command line
 if __name__ == "__main__":
+
   if sc.rtm_connect():
+    print("connected to slack!")
+
     while sc.server.connected is True:
       events = sc.rtm_read()
       for evt in events:
+        print_json(evt)
         handle_event(evt)
 
       time.sleep(1)
