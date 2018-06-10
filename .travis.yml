@@ -9,4 +9,4 @@ cache:
     - ${HOME}/.cache/pants
 
 script:
-  - ./pants test "tests::"
+  - ./pants test "tests::" --cache-test-pytest-ignore
