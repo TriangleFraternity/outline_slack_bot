@@ -10,7 +10,10 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Bot User OAuth Access Tokenfrom https://api.slack.com/apps/AB1GJ5QLX/oauth?
-sc = SlackClient(os.environ["OAUTH_TOKEN"])
+bot = SlackClient(os.environ["BOT_OAUTH_TOKEN"])
+user = SlackClient(os.environ["USER_OAUTH_TOKEN"])
+allowed_channels = 'test_x',
+
 
 #TODO get id from bot name
 BOT_CALLOUT = '<@UAZUM5K33>'
@@ -55,6 +58,9 @@ def get_channels(client):
   return _channel_map
 
 
+channel_map = get_channels(bot)
+allowed_channel_ids = [channel_id for channel_id in channel_map if channel_map[channel_id]['name'] in allowed_channels]
+
 # This is the entry point for aws lambda execution.
 def lambda_handler(data, context):
   """Handle an incoming HTTP request from a Slack chat-bot.
@@ -73,18 +79,20 @@ def lambda_handler(data, context):
 def search_thread_parent_for_urls(channel, thread_ts):
   """return list of urls from thread's parent post"""
   #TODO enable scope channels:history
-  response = sc.api_call(
+  response = user.api_call(
               'channels.replies',
               channel=channel,
               thread_ts=thread_ts,
               )
 
-  urls = []
-  if response['ok'] == 'true' and 'messages' in response:
-    # from all thread messages, find earliest ts and return the text of that post
-    parent_thread_text = sorted([x['text'] for x in response['messages']], key=lambda x: x['ts'])[0]
+  print_json(response)
 
-    urls = find_urls(parent_thread_text)
+  urls = []
+  if response['ok'] and 'messages' in response:
+    # from all thread messages, find earliest ts and return the text of that post
+    parent_thread_text = response['messages'][0]['text']
+
+    urls.extend(find_urls(parent_thread_text))
 
   return urls
 
@@ -113,11 +121,11 @@ def handle_event(event):
   if event_is_human_thread_reply(event):
 
     # get list of urls from thread parent post
-    urls = search_thread_parent_for_urls(event['thread_ts'], event['thread_ts'])
+    urls = search_thread_parent_for_urls(event['channel'], event['thread_ts'])
 
     #TODO put url whitelist/blacklist test here.  urls should be filtered at this exact point.
     # if urls parsed successfully, post link
-    if len(urls) > 0:
+    if urls:
       logger.info("urls: {}".format(urls))
       outline_urls = ['https://outline.com/' + u for u in urls]
       bot_text = ' '.join(outline_urls)
@@ -127,22 +135,22 @@ def handle_event(event):
       bot_text = "Sorry, but I couldn't find any urls to post.   :feelsbadman:"
 
     # always reply if event_is_human_thread_reply(event) = True
-    sc.api_call(
+    bot.api_call(
       'chat.postMessage',
       channel=event['channel'],
       thread_ts=event['thread_ts'],
-      unfurl_links='true',
+      unfurl_links='false',
       text=bot_text
       )
 
 # This is the entry point for testing from command line
 if __name__ == "__main__":
 
-  if sc.rtm_connect():
+  if bot.rtm_connect():
     print("connected to slack!")
 
-    while sc.server.connected is True:
-      events = sc.rtm_read()
+    while bot.server.connected is True:
+      events = bot.rtm_read()
       for evt in events:
         print_json(evt)
         handle_event(evt)
