@@ -1,24 +1,27 @@
 import logging
 import os
 import time
+import json
 
 from slackclient import SlackClient
-
 from com.illinoistriangle.lib.urlmarker import find_urls
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# sc = SlackClient(os.environ["BOT_TOKEN"])
-
 # Bot User OAuth Access Tokenfrom https://api.slack.com/apps/AB1GJ5QLX/oauth?
-sc = SlackClient(os.environ["OAUTH_TOKEN"])
+bot = SlackClient(os.environ["BOT_OAUTH_TOKEN"])
+app = SlackClient(os.environ["APP_OAUTH_TOKEN"])
+allowed_channels = 'test_x',
 
-FIELD_TEXT = 'text'
-FIELD_CHANNEL = 'channel'
-VALUE_TYPE_BOT_MESSAGE = 'bot_message'
-VALUE_TYPE_MESSAGE = 'message'
-APP_NAME = ''
+
+#TODO get id from bot name
+BOT_CALLOUT = '<@UAZUM5K33>'
+
+
+def print_json(json_msg):
+  """pretty pretty json"""
+  logger.debug(json.dumps(json_msg, indent=4))
 
 
 def get_channels(client):
@@ -55,7 +58,8 @@ def get_channels(client):
   return _channel_map
 
 
-channel_map = get_channels(sc)
+channel_map = get_channels(bot)
+allowed_channel_ids = [channel_id for channel_id in channel_map if channel_map[channel_id]['name'] in allowed_channels]
 
 # This is the entry point for aws lambda execution.
 def lambda_handler(data, context):
@@ -72,39 +76,85 @@ def lambda_handler(data, context):
   handle_event(slack_event)
 
 
-def handle_event(e):
-  if 'subtype' in e and e['subtype'] == VALUE_TYPE_BOT_MESSAGE:
+def search_thread_parent_for_urls(channel, thread_ts):
+  """return list of urls from thread's parent post"""
+  #TODO enable scope channels:history
+  response = app.api_call(
+              'channels.replies',
+              channel=channel,
+              thread_ts=thread_ts,
+              )
+
+  print_json(response)
+
+  urls = []
+  if response['ok'] and 'messages' in response:
+    # from all thread messages, find earliest ts and return the text of that post
+    parent_thread_text = response['messages'][0]['text']
+
+    urls.extend(find_urls(parent_thread_text))
+
+  return urls
+
+
+def event_is_human_thread_reply(event):
+  """return True if the event warrants the bot's response"""
+
+  # if a message was posted...
+  if 'type' in event and event['type'] == 'message':
+    # ... by someone other than a bot...
+    if 'subtype' not in event or event['subtype'] != 'bot_message':
+      # ... in a thread...
+      if 'thread_ts' in event:
+        # TODO add channel whitelist
+        # ... in an appropriate channel...
+        if 'channel' in event and event['channel'] in allowed_channel_ids:
+          # ... and the bot was called...
+          if 'text' in event and BOT_CALLOUT in event['text']:
+            return True
+
+  return False
+
+
+def handle_event(event):
+  # only reply to thread messages, made by humans, that call out the bot
+  if not event_is_human_thread_reply(event):
+    # ignore
     return
 
-  if e['type'] != VALUE_TYPE_MESSAGE:
-    return
+  # get list of urls from thread parent post
+  urls = search_thread_parent_for_urls(event['channel'], event['thread_ts'])
 
-  if FIELD_TEXT not in e:
-    return
+  #TODO put url whitelist/blacklist test here.  urls should be filtered at this exact point.
+  # if urls parsed successfully, post link
+  if urls:
+    logger.info("urls: {}".format(urls))
+    outline_urls = ['<https://outline.com/{}|{}...>'.format(u, u[:30]) for u in urls]
+    bot_text = '\r\n'.join(outline_urls)
 
-  channel_id = e[FIELD_CHANNEL]
-  if channel_id not in channel_map:
-    return
+  # if failure, apologize
+  else:
+    bot_text = "Sorry, but I couldn't find any urls to post.   :feelsbadman:"
 
-  if channel_map[channel_id]['name'] not in ['test_x']:
-    return
-  urls = find_urls(e[FIELD_TEXT])
-  logger.info("urls: {}".format(urls))
-  outline_urls = ['https://outline.com/' + u for u in urls]
-  sc.api_call(
-    "chat.postMessage",
-    # TODO: param this.
-    channel=channel_id,
-    text=' '.join(outline_urls)
-  )
+  # always reply if event_is_human_thread_reply(event) = True
+  bot.api_call(
+    'chat.postMessage',
+    channel=event['channel'],
+    thread_ts=event['thread_ts'],
+    unfurl_links='false',
+    text=bot_text
+    )
 
 
 # This is the entry point for testing from command line
 if __name__ == "__main__":
-  if sc.rtm_connect():
-    while sc.server.connected is True:
-      events = sc.rtm_read()
+
+  if bot.rtm_connect():
+
+    while bot.server.connected is True:
+      events = bot.rtm_read()
       for evt in events:
+        print_json(evt)
         handle_event(evt)
 
       time.sleep(1)
