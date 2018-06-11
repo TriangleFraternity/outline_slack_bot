@@ -1,9 +1,10 @@
+import json
 import logging
 import os
 import time
-import json
 
 from slackclient import SlackClient
+
 from com.illinoistriangle.lib.urlmarker import find_urls
 
 logger = logging.getLogger()
@@ -12,10 +13,9 @@ logger.setLevel(logging.INFO)
 # Bot User OAuth Access Tokenfrom https://api.slack.com/apps/AB1GJ5QLX/oauth?
 bot = SlackClient(os.environ["BOT_OAUTH_TOKEN"])
 app = SlackClient(os.environ["APP_OAUTH_TOKEN"])
-allowed_channels = 'test_x',
+allowed_channels = ('test_x',)
 
-
-#TODO get id from bot name
+# TODO get id from bot name
 BOT_CALLOUT = '<@UAZUM5K33>'
 
 
@@ -61,6 +61,7 @@ def get_channels(client):
 channel_map = get_channels(bot)
 allowed_channel_ids = [channel_id for channel_id in channel_map if channel_map[channel_id]['name'] in allowed_channels]
 
+
 # This is the entry point for aws lambda execution.
 def lambda_handler(data, context):
   """Handle an incoming HTTP request from a Slack chat-bot.
@@ -78,12 +79,12 @@ def lambda_handler(data, context):
 
 def search_thread_parent_for_urls(channel, thread_ts):
   """return list of urls from thread's parent post"""
-  #TODO enable scope channels:history
+  # TODO enable scope channels:history
   response = app.api_call(
-              'channels.replies',
-              channel=channel,
-              thread_ts=thread_ts,
-              )
+    'channels.replies',
+    channel=channel,
+    thread_ts=thread_ts,
+  )
 
   print_json(response)
 
@@ -125,7 +126,7 @@ def handle_event(event):
   # get list of urls from thread parent post
   urls = search_thread_parent_for_urls(event['channel'], event['thread_ts'])
 
-  #TODO put url whitelist/blacklist test here.  urls should be filtered at this exact point.
+  # TODO put url whitelist/blacklist test here. urls should be filtered at this exact point.
   # if urls parsed successfully, post link
   if urls:
     logger.info("urls: {}".format(urls))
@@ -143,7 +144,7 @@ def handle_event(event):
     thread_ts=event['thread_ts'],
     unfurl_links='false',
     text=bot_text
-    )
+  )
 
 
 # This is the entry point for testing from command line
