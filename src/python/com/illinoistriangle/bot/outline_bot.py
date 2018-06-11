@@ -21,7 +21,7 @@ BOT_CALLOUT = '<@UAZUM5K33>'
 
 def print_json(json_msg):
   """pretty pretty json"""
-  print(json.dumps(json_msg, indent=4))
+  logger.debug(json.dumps(json_msg, indent=4))
 
 
 def get_channels(client):
@@ -127,8 +127,8 @@ def handle_event(event):
     # if urls parsed successfully, post link
     if urls:
       logger.info("urls: {}".format(urls))
-      outline_urls = ['https://outline.com/' + u for u in urls]
-      bot_text = ' '.join(outline_urls)
+      outline_urls = ['<https://outline.com/{}|{}...>'.format(u, u[:30]) for u in urls]
+      bot_text = '\r\n'.join(outline_urls)
 
     # if failure, apologize
     else:
@@ -147,7 +147,6 @@ def handle_event(event):
 if __name__ == "__main__":
 
   if bot.rtm_connect():
-    print("connected to slack!")
 
     while bot.server.connected is True:
       events = bot.rtm_read()
