@@ -11,7 +11,7 @@ logger.setLevel(logging.INFO)
 
 # Bot User OAuth Access Tokenfrom https://api.slack.com/apps/AB1GJ5QLX/oauth?
 bot = SlackClient(os.environ["BOT_OAUTH_TOKEN"])
-user = SlackClient(os.environ["USER_OAUTH_TOKEN"])
+app = SlackClient(os.environ["APP_OAUTH_TOKEN"])
 allowed_channels = 'test_x',
 
 
@@ -79,7 +79,7 @@ def lambda_handler(data, context):
 def search_thread_parent_for_urls(channel, thread_ts):
   """return list of urls from thread's parent post"""
   #TODO enable scope channels:history
-  response = user.api_call(
+  response = app.api_call(
               'channels.replies',
               channel=channel,
               thread_ts=thread_ts,
@@ -108,7 +108,7 @@ def event_is_human_thread_reply(event):
       if 'thread_ts' in event:
         # TODO add channel whitelist
         # ... in an appropriate channel...
-        if 'channel' in event and event['channel'] in ['C7RLA5HAA', ]:
+        if 'channel' in event and event['channel'] in allowed_channel_ids:
           # ... and the bot was called...
           if 'text' in event and BOT_CALLOUT in event['text']:
             return True
@@ -118,30 +118,33 @@ def event_is_human_thread_reply(event):
 
 def handle_event(event):
   # only reply to thread messages, made by humans, that call out the bot
-  if event_is_human_thread_reply(event):
+  if not event_is_human_thread_reply(event):
+    # ignore
+    return
 
-    # get list of urls from thread parent post
-    urls = search_thread_parent_for_urls(event['channel'], event['thread_ts'])
+  # get list of urls from thread parent post
+  urls = search_thread_parent_for_urls(event['channel'], event['thread_ts'])
 
-    #TODO put url whitelist/blacklist test here.  urls should be filtered at this exact point.
-    # if urls parsed successfully, post link
-    if urls:
-      logger.info("urls: {}".format(urls))
-      outline_urls = ['<https://outline.com/{}|{}...>'.format(u, u[:30]) for u in urls]
-      bot_text = '\r\n'.join(outline_urls)
+  #TODO put url whitelist/blacklist test here.  urls should be filtered at this exact point.
+  # if urls parsed successfully, post link
+  if urls:
+    logger.info("urls: {}".format(urls))
+    outline_urls = ['<https://outline.com/{}|{}...>'.format(u, u[:30]) for u in urls]
+    bot_text = '\r\n'.join(outline_urls)
 
-    # if failure, apologize
-    else:
-      bot_text = "Sorry, but I couldn't find any urls to post.   :feelsbadman:"
+  # if failure, apologize
+  else:
+    bot_text = "Sorry, but I couldn't find any urls to post.   :feelsbadman:"
 
-    # always reply if event_is_human_thread_reply(event) = True
-    bot.api_call(
-      'chat.postMessage',
-      channel=event['channel'],
-      thread_ts=event['thread_ts'],
-      unfurl_links='false',
-      text=bot_text
-      )
+  # always reply if event_is_human_thread_reply(event) = True
+  bot.api_call(
+    'chat.postMessage',
+    channel=event['channel'],
+    thread_ts=event['thread_ts'],
+    unfurl_links='false',
+    text=bot_text
+    )
+
 
 # This is the entry point for testing from command line
 if __name__ == "__main__":
